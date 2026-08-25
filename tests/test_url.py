@@ -1632,6 +1632,46 @@ class TestCanonicalizeUrl:
             == "sftp://UsEr:PaSsWoRd@www.example.com/"
         )
 
+    def test_resolve_dot_segments(self):
+        assert (
+            canonicalize_url("http://www.example.com/a/b/../../c")
+            == "http://www.example.com/c"
+        )
+        assert (
+            canonicalize_url("http://www.example.com/a/./b")
+            == "http://www.example.com/a/b"
+        )
+        # a trailing ".." leaves a directory reference, regardless of
+        # whether it is followed by a literal trailing slash
+        assert (
+            canonicalize_url("http://www.example.com/a/b/..")
+            == "http://www.example.com/a/"
+        )
+        assert (
+            canonicalize_url("http://www.example.com/a/b/../")
+            == "http://www.example.com/a/"
+        )
+        # dot segments beyond the root are dropped, not turned into "../"
+        assert (
+            canonicalize_url("http://www.example.com/../a")
+            == "http://www.example.com/a"
+        )
+        # percent-encoded dots are decoded before dot segments are resolved
+        assert (
+            canonicalize_url("http://www.example.com/%2E%2E/a")
+            == "http://www.example.com/a"
+        )
+
+    def test_normalize_ipv6_host(self):
+        assert canonicalize_url("http://[::0:1]/") == "http://[::1]/"
+        assert (
+            canonicalize_url("http://[2001:0DB8:0000:0000:0000:0000:0000:0001]:8080/a")
+            == "http://[2001:db8::1]:8080/a"
+        )
+        assert (
+            canonicalize_url("http://user:pass@[::1]/a") == "http://user:pass@[::1]/a"
+        )
+
     def test_canonicalize_idns(self):
         assert (
             canonicalize_url("http://www.bücher.de?q=bücher")
