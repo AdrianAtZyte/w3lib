@@ -42,6 +42,7 @@ from w3lib._url import (
     _urlunsplit,
 )
 from w3lib.url import (
+    _normalize_ipv6_host,
     add_or_replace_parameter,
     add_or_replace_parameters,
     any_to_uri,
@@ -2108,6 +2109,24 @@ class TestPrivateHelpers:
         assert _split_params("http", path) == expected
         # schemes that do not use params keep the path intact
         assert _split_params("data", path) == (path, "")
+
+    @pytest.mark.parametrize(
+        ("netloc", "expected"),
+        [
+            # no brackets at all
+            ("example.com", "example.com"),
+            # unclosed bracket
+            ("[::1", "[::1"),
+            # content between brackets is not a valid IP address
+            ("[not-an-address]", "[not-an-address]"),
+            # an IPv4 address in brackets is left untouched
+            ("[127.0.0.1]", "[127.0.0.1]"),
+            # a valid IPv6 address is normalized
+            ("[::0:1]", "[::1]"),
+        ],
+    )
+    def test_normalize_ipv6_host(self, netloc, expected):
+        assert _normalize_ipv6_host(netloc) == expected
 
 
 class TestPrivateHelpersProperties:

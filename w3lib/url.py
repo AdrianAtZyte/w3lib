@@ -737,21 +737,27 @@ def canonicalize_url(
     )
     netloc = (netloc[: uinf_sep_idx + 1] + host) if uinf_sep_idx != -1 else host
 
-    # normalize IPv6 addresses (RFC 5952)
-    if netloc.startswith("[") or "@[" in netloc:
-        bracket_start = netloc.index("[")
-        bracket_end = netloc.find("]", bracket_start)
-        if bracket_end != -1:
-            try:
-                address = ip_address(netloc[bracket_start + 1 : bracket_end])
-            except ValueError:
-                pass
-            else:
-                if isinstance(address, IPv6Address):
-                    netloc = f"{netloc[:bracket_start]}[{address}]{netloc[bracket_end + 1 :]}"
+    netloc = _normalize_ipv6_host(netloc)
 
     # every part should be safe already
     return _urlunparse(scheme, netloc, path, params, query, fragment)
+
+
+def _normalize_ipv6_host(netloc: str) -> str:
+    """Normalize an IPv6 address in the host part of *netloc*, if any (RFC 5952)."""
+    if "[" not in netloc:
+        return netloc
+    bracket_start = netloc.index("[")
+    bracket_end = netloc.find("]", bracket_start)
+    if bracket_end == -1:
+        return netloc
+    try:
+        address = ip_address(netloc[bracket_start + 1 : bracket_end])
+    except ValueError:
+        return netloc
+    if not isinstance(address, IPv6Address):
+        return netloc
+    return f"{netloc[:bracket_start]}[{address}]{netloc[bracket_end + 1 :]}"
 
 
 def _unquotepath(path: str) -> bytes:
