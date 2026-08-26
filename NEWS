@@ -105,6 +105,12 @@ Security and correctness fixes:
   the euro sign when the encoding is GB18030, matching the WHATWG Encoding
   Standard (#300).
 
+- :func:`~w3lib.html.get_meta_refresh` no longer prints the HTML content it
+  was given to stdout when a :exc:`UnicodeDecodeError` is raised (#256).
+
+- Tests, benchmarking and CI improvements (#247, #259, #262, #281, #296,
+  #304).
+
 2.4.1 (2026-03-20)
 ------------------
 
