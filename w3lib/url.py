@@ -508,6 +508,14 @@ def any_to_uri(uri_or_path: str) -> str:
     return uri_or_path if _urlparse(uri_or_path)[0] else path_to_file_uri(uri_or_path)
 
 
+def add_http_if_no_scheme(url: str) -> str:
+    """Add ``http`` as the default scheme if it is missing from *url*."""
+    if not re.match(r"^\w+://", url, flags=re.IGNORECASE):
+        scheme = "http:" if _urlparse(url).netloc else "http://"
+        url = scheme + url
+    return url
+
+
 # ASCII characters.
 _char = set(map(chr, range(127)))
 
@@ -601,6 +609,7 @@ def parse_data_uri(uri: str | bytes) -> ParseDataURIResult:
 
 
 __all__ = [
+    "add_http_if_no_scheme",
     "add_or_replace_parameter",
     "add_or_replace_parameters",
     "any_to_uri",

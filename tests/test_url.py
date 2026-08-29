@@ -43,6 +43,7 @@ from w3lib._url import (
 )
 from w3lib.url import (
     _normalize_ipv6_host,
+    add_http_if_no_scheme,
     add_or_replace_parameter,
     add_or_replace_parameters,
     any_to_uri,
@@ -956,6 +957,18 @@ class TestUrl:
         assert not is_url("foo://bar")
         assert not is_url("foo--bar")
 
+    def test_add_http_if_no_scheme(self):
+        assert add_http_if_no_scheme("www.example.com") == "http://www.example.com"
+        assert add_http_if_no_scheme("//www.example.com") == "http://www.example.com"
+        assert (
+            add_http_if_no_scheme("https://www.example.com")
+            == "https://www.example.com"
+        )
+        assert (
+            add_http_if_no_scheme("HTTPS://www.example.com")
+            == "HTTPS://www.example.com"
+        )
+
     def test_url_query_parameter(self):
         assert url_query_parameter("product.html?id=200&foo=bar", "id") == "200"
         assert (
@@ -1280,6 +1293,12 @@ class TestSafeDownloadUrlProperties:
     @given(hyp_urls())
     def test_no_exception(self, url: str) -> None:
         safe_download_url(url)
+
+
+class TestAddHttpIfNoSchemeProperties:
+    @given(st.text() | hyp_urls())
+    def test_no_exception(self, url: str) -> None:
+        add_http_if_no_scheme(url)
 
 
 class TestIsUrlProperties:
