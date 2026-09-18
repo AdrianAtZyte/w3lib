@@ -10,11 +10,19 @@ from html.entities import name2codepoint
 from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
-from w3lib._util import _scannable, iter_tag_attributes, to_unicode
+from w3lib._util import (
+    _decode,
+    _scannable,
+    _url_encoding,
+    iter_tag_attributes,
+    to_unicode,
+)
 from w3lib.url import safe_url_string
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from w3lib.encoding import EncodingDecision
 
 
 # Character references are ASCII digits only; \d would also match the Unicode
@@ -421,10 +429,16 @@ def unquote_markup(
 
 
 def get_base_url(
-    text: str | bytes, baseurl: str | bytes = "", encoding: str = "utf-8"
+    text: str | bytes,
+    baseurl: str | bytes = "",
+    encoding: str | EncodingDecision = "utf-8",
 ) -> str:
     """Return the base url if declared in the given HTML `text`,
     relative to the given base url.
+
+    .. versionchanged:: VERSION
+       *encoding* may be an :class:`~w3lib.encoding.EncodingDecision`, which
+       decodes *text* itself and sets the encoding of the returned URL.
 
     If no base url is found, the given `baseurl` is returned.
 
@@ -441,12 +455,13 @@ def get_base_url(
     ):
         return safe_url_string(baseurl)
 
-    utext = to_unicode(text, encoding)
+    utext = _decode(text, encoding)
     if _base_re.search(utext):
         for m in _base_scan_re.finditer(utext):
             if url := m.group("url"):
                 return urljoin(
-                    safe_url_string(baseurl), safe_url_string(url, encoding=encoding)
+                    safe_url_string(baseurl),
+                    safe_url_string(url, encoding=_url_encoding(encoding)),
                 )
     return safe_url_string(baseurl)
 
@@ -454,13 +469,17 @@ def get_base_url(
 def get_meta_refresh(
     text: str | bytes,
     baseurl: str = "",
-    encoding: str = "utf-8",
+    encoding: str | EncodingDecision = "utf-8",
     ignore_tags: Iterable[str] = ("script", "noscript"),
 ) -> tuple[None, None] | tuple[float, str]:
     """Return the http-equiv parameter of the HTML meta element from the given
     HTML text and return a tuple ``(interval, url)`` where interval is a float
     containing the delay in seconds (or zero if not present) and url is a
     string with the absolute url to redirect.
+
+    .. versionchanged:: VERSION
+       *encoding* may be an :class:`~w3lib.encoding.EncodingDecision`, which
+       decodes *text* itself and sets the encoding of the returned URL.
 
     If no meta redirect is found, ``(None, None)`` is returned.
 
@@ -479,7 +498,7 @@ def get_meta_refresh(
         ):
             return None, None
 
-    utext = to_unicode(text, encoding)
+    utext = _decode(text, encoding)
     if not _meta_re.search(utext):
         return None, None
 
@@ -509,7 +528,7 @@ def get_meta_refresh(
 
         if has_refresh_pragma and interval is not None:
             assert url is not None
-            url = safe_url_string(url.strip(" \"'"), encoding)
+            url = safe_url_string(url.strip(" \"'"), _url_encoding(encoding))
             return interval, urljoin(baseurl, url)
 
     return None, None

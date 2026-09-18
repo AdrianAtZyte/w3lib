@@ -494,6 +494,19 @@ although this is inside a cdata! &amp; &quot;</node1><node2>blah&blahblahblahbla
         assert time.process_time() - start < 2
 
 
+class _Decision:
+    """Stand-in for an :class:`~w3lib.encoding.EncodingDecision` of a backend
+    other than the one of w3lib, which decodes with *codec* under *name*."""
+
+    def __init__(self, name: str, codec: str, ascii_compatible: bool = True) -> None:
+        self.name = name
+        self.ascii_compatible = ascii_compatible
+        self._codec = codec
+
+    def decode(self, body: bytes) -> str:
+        return body.decode(self._codec, "replace")
+
+
 class TestGetBaseUrl:
     def test_get_base_url(self):
         baseurl = "https://example.org"
@@ -767,6 +780,47 @@ class TestGetBaseUrl:
         assert get_base_url(text, "https://example.org") == "https://example.org"
         assert (
             get_base_url(text.encode(), "https://example.org") == "https://example.org"
+        )
+
+    def test_get_base_url_decision(self) -> None:
+        # The decision decodes the document, so these bytes are not the
+        # characters that the Python codec of the same name would give.
+        raw = b"<base href='/\x93'>"
+        assert (
+            get_base_url(raw, "https://example.org", _Decision("latin-1", "cp1252"))
+            == "https://example.org/%E2%80%9C"
+        )
+        assert (
+            get_base_url(raw, "https://example.org", "latin-1")
+            == "https://example.org/%C2%93"
+        )
+
+    def test_get_base_url_decision_unknown_codec(self) -> None:
+        # URLs of a document whose encoding Python cannot look up are
+        # percent-encoded as UTF-8, as they are for a document whose encoding
+        # is not ASCII-compatible.
+        raw = "<base href='/x?q=\u0e01'>".encode("cp874")
+        assert (
+            get_base_url(raw, "https://example.org", _Decision("windows-874", "cp874"))
+            == "https://example.org/x?q=%E0%B8%81"
+        )
+        with pytest.raises(LookupError):
+            get_base_url(raw, "https://example.org", "windows-874")
+
+    def test_get_base_url_decision_non_ascii_compatible(self) -> None:
+        raw = "<base href='/path'>".encode("utf-16")
+        decision = _Decision("utf-16", "utf-16", ascii_compatible=False)
+        assert (
+            get_base_url(raw, "https://example.org", decision)
+            == "https://example.org/path"
+        )
+
+    def test_get_base_url_decision_dropped_escape(self) -> None:
+        # The decision is probed with its own decoder, which drops ESC ( B.
+        decision = _Decision("iso-2022-jp", "iso2022_jp")
+        assert (
+            get_base_url(b"<ba\x1b(Bse href='/path'>", "https://example.org", decision)
+            == "https://example.org/path"
         )
 
 
@@ -1142,6 +1196,25 @@ http://www.example.org/index.php" />
             "</\u017fcript>"
         )
         assert get_meta_refresh(body, "http://example.org") == (
+            3.0,
+            "http://example.org/next",
+        )
+
+    def test_get_meta_refresh_decision(self) -> None:
+        # The decision decodes the document and sets the URL encoding, so an
+        # encoding name that Python cannot look up works.
+        raw = "<meta http-equiv='refresh' content='3;url=/x?q=\u0e01'>".encode("cp874")
+        assert get_meta_refresh(
+            raw, "http://example.org", _Decision("windows-874", "cp874")
+        ) == (3.0, "http://example.org/x?q=%E0%B8%81")
+        with pytest.raises(LookupError):
+            get_meta_refresh(raw, "http://example.org", "windows-874")
+
+    def test_get_meta_refresh_decision_dropped_escape(self) -> None:
+        # The decision is probed with its own decoder, which drops ESC ( B.
+        raw = b"<me\x1b(Bta http-equiv='refresh' content='3;url=/next'>"
+        decision = _Decision("iso-2022-jp", "iso2022_jp")
+        assert get_meta_refresh(raw, "http://example.org", decision) == (
             3.0,
             "http://example.org/next",
         )

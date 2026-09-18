@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import codecs
 import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from w3lib.encoding import EncodingDecision
 
 
 def to_unicode(
@@ -48,21 +51,57 @@ _DROPPED = (b"\x1b(B", b"\x0e", b"\x0f")
 
 
 @lru_cache(maxsize=64)
-def _scannable(encoding: str | None) -> bool:
-    r"""Return whether every character sequence of a document written in
-    *encoding* is a byte sequence of its undecoded bytes, so that markup that
-    the bytes do not contain is markup that the document does not contain.
-
-    It takes ASCII compatibility, which makes ASCII characters their own
-    bytes, and an encoding that cannot write those bytes apart, e.g.
-    ``b"<ba\x1b(Bse"`` decodes to ``"<base"`` under ISO-2022-JP.
-    """
+def _scannable_name(encoding: str | None) -> bool:
     if not _ascii_compatible(encoding):
         return False
     return all(
         (b"a" + dropped + b"b").decode(encoding or "utf-8", "replace") != "ab"
         for dropped in _DROPPED
     )
+
+
+def _scannable(encoding: str | EncodingDecision) -> bool:
+    r"""Return whether every character sequence of a document written in
+    *encoding* is a byte sequence of its undecoded bytes, so that markup that
+    the bytes do not contain is markup that the document does not contain.
+
+    It takes ASCII compatibility, which makes ASCII characters their own
+    bytes, and a decoder that cannot write those bytes apart, e.g.
+    ``b"<ba\x1b(Bse"`` decodes to ``"<base"`` under ISO-2022-JP.
+    """
+    if isinstance(encoding, str):
+        return _scannable_name(encoding)
+    return encoding.ascii_compatible and all(
+        encoding.decode(b"a" + dropped + b"b") != "ab" for dropped in _DROPPED
+    )
+
+
+def _decode(text: str | bytes, encoding: str | EncodingDecision) -> str:
+    """Return *text* decoded with *encoding*, which decodes it itself when it
+    is a decision rather than the name of a Python codec."""
+    if isinstance(encoding, str):
+        return to_unicode(text, encoding)
+    return text if isinstance(text, str) else encoding.decode(text)
+
+
+def _request_encoding(decision: EncodingDecision) -> str:
+    """Return the encoding for URLs found in a document that *decision*
+    decodes, in the Python spelling."""
+    if not decision.ascii_compatible:
+        return "utf-8"
+    try:
+        codecs.lookup(decision.name)
+    except LookupError:
+        return "utf-8"
+    return decision.name
+
+
+def _url_encoding(encoding: str | EncodingDecision) -> str:
+    """Return the encoding to percent-encode the URLs of a document written
+    in *encoding*, which is *encoding* itself when it is a name."""
+    if isinstance(encoding, str):
+        return encoding
+    return _request_encoding(encoding)
 
 
 # One attribute: a name and, optionally, a value, quoted or not. Each quoting

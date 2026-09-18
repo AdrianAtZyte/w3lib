@@ -10,7 +10,7 @@ import re
 from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING, Protocol, cast
 
-from w3lib._util import _ascii_compatible, iter_tag_attributes
+from w3lib._util import _ascii_compatible, _request_encoding, iter_tag_attributes
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -418,13 +418,7 @@ class EncodingContext:
         It is UTF-8 when the document encoding is not ASCII-compatible or
         Python has no codec for it.
         """
-        if not self.decision.ascii_compatible:
-            return "utf-8"
-        try:
-            codecs.lookup(self.encoding)
-        except LookupError:
-            return "utf-8"
-        return self.encoding
+        return _request_encoding(self.decision)
 
 
 class _Decision:
